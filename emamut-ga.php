@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name:       emamut Google Analytics
+ * Plugin Name:       Google Analytics
  * Plugin URI:        https://github.com/emamut-dev/emamut-ga
  * Description:       Añade la etiqueta de Google Analytics (GA4 / gtag.js) en todas las páginas de tu sitio WordPress de forma sencilla, segura y optimizada.
  * Version:           1.0.0
@@ -110,16 +110,35 @@ class Emamut_Google_Analytics {
 
 		// Comprobar si se excluye a usuarios administradores
 		if ( $this->should_exclude_admin() && current_user_can( 'manage_options' ) ) {
-			echo "\n<!-- Emamut Google Analytics: Rastreo omitido para administradores -->\n";
+			return;
+		}
+
+		/**
+		 * Permite a plugins de cookies, consentimiento (RGPD / CMP) o temas desactivar el rastreo.
+		 *
+		 * @param bool $disable_tracking True para omitir el rastreo, false por defecto.
+		 */
+		if ( apply_filters( 'emamut_ga_disable_tracking', false ) ) {
 			return;
 		}
 
 		$escaped_id    = esc_attr( $measurement_id );
 		$escaped_js_id = esc_js( $measurement_id );
+		$nonce_attr    = '';
+
+		/**
+		 * Permite inyectar un atributo nonce para sitios con Content Security Policy (CSP) estricta.
+		 *
+		 * @param string $nonce Atributo o valor del nonce.
+		 */
+		$nonce = apply_filters( 'emamut_ga_script_nonce', '' );
+		if ( ! empty( $nonce ) ) {
+			$nonce_attr = ' nonce="' . esc_attr( $nonce ) . '"';
+		}
 		?>
 <!-- Google tag (gtag.js) - Google Analytics -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=<?php echo $escaped_id; ?>"></script>
-<script>
+<script async src="https://www.googletagmanager.com/gtag/js?id=<?php echo $escaped_id; ?>"<?php echo $nonce_attr; ?>></script>
+<script<?php echo $nonce_attr; ?>>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
   gtag('js', new Date());
@@ -153,6 +172,8 @@ class Emamut_Google_Analytics {
 			array(
 				'type'              => 'array',
 				'sanitize_callback' => array( $this, 'sanitize_settings' ),
+				'show_in_rest'      => false,
+				'capability'        => 'manage_options',
 				'default'           => array(
 					'measurement_id' => '',
 					'exclude_admin'  => 1,
@@ -192,6 +213,11 @@ class Emamut_Google_Analytics {
 	 */
 	public function sanitize_settings( $input ) {
 		$sanitized = array();
+		$existing  = get_option( EMAMUT_GA_OPTION_NAME, array() );
+
+		if ( ! is_array( $input ) ) {
+			return is_array( $existing ) ? $existing : array();
+		}
 
 		if ( isset( $input['measurement_id'] ) ) {
 			$raw_id   = trim( (string) $input['measurement_id'] );
@@ -206,7 +232,8 @@ class Emamut_Google_Analytics {
 						'error'
 					);
 				}
-				$sanitized['measurement_id'] = '';
+				// Mantener el ID previo para no perder la configuración por un error tipográfico
+				$sanitized['measurement_id'] = isset( $existing['measurement_id'] ) ? $existing['measurement_id'] : '';
 			} else {
 				$sanitized['measurement_id'] = sanitize_text_field( $clean_id );
 			}
@@ -231,8 +258,8 @@ class Emamut_Google_Analytics {
 	 */
 	public function render_measurement_id_field() {
 		$options        = get_option( EMAMUT_GA_OPTION_NAME, array() );
-		$measurement_id = isset( $options['measurement_id'] ) ? $options['measurement_id'] : '';
 		$is_defined     = defined( 'EMAMUT_GA_ID' ) && '' !== trim( EMAMUT_GA_ID );
+		$measurement_id = $is_defined ? sanitize_text_field( trim( EMAMUT_GA_ID ) ) : ( isset( $options['measurement_id'] ) ? $options['measurement_id'] : '' );
 		?>
 		<input
 			type="text"
@@ -344,7 +371,7 @@ class Emamut_Google_Analytics {
 			?>
 			<div class="notice notice-warning is-dismissible">
 				<p>
-					<strong><?php esc_html_e( 'Emamut Google Analytics:', 'emamut-ga' ); ?></strong>
+					<strong><?php esc_html_e( 'Google Analytics:', 'emamut-ga' ); ?></strong>
 					<?php esc_html_e( 'Aún no has configurado tu ID de medición.', 'emamut-ga' ); ?>
 					<a href="<?php echo esc_url( admin_url( 'options-general.php?page=emamut-ga' ) ); ?>">
 						<?php esc_html_e( 'Configurar ahora', 'emamut-ga' ); ?> &rarr;
