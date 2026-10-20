@@ -18,8 +18,9 @@ Añade la etiqueta de Google Analytics (GA4 / gtag.js) en todas las páginas de 
 * **Fácil configuración:** Simplemente ingresa tu ID de medición (`G-XXXXXXXXXX`) y listo.
 * **Inserción automática en `<head>`:** Se inserta en todas las páginas públicas del frontend con la prioridad recomendada por Google.
 * **Exclusión de administradores:** Evita que tus visitas como administrador distorsionen las estadísticas de tu sitio web.
-* **Seguro y optimizado:** Sanitización estricta de datos, sin dependencias externas innecesarias ni impacto en la velocidad del sitio.
+* **Seguro y optimizado:** Sanitización y validación estricta de datos, soporte para CSP nonces, sin dependencias externas innecesarias ni impacto en la velocidad del sitio.
 * **Soporte para constante en wp-config.php:** Puedes definir `define('EMAMUT_GA_ID', 'G-XXXXXXXXXX');` para entornos automatizados o CI/CD.
+* **Listo para RGPD y Consent Mode v2:** Filtros para integración con CMPs y configuración de consentimiento (`emamut_ga_disable_tracking` y `emamut_ga_consent_defaults`).
 
 == Installation ==
 
@@ -40,7 +41,10 @@ Añade la etiqueta de Google Analytics (GA4 / gtag.js) en todas las páginas de 
 No, el script solo se carga en las páginas públicas del sitio web para no saturar el panel de administración con llamadas innecesarias.
 
 = ¿Puedo excluir mis propias visitas del rastreo? =
-Sí, el plugin incluye una casilla para excluir visitas de usuarios con rol de Administrador.
+Sí, el plugin incluye una casilla para excluir visitas de usuarios con rol de Administrador. Si usas plugins de caché de página completa (como WP Rocket, LiteSpeed o WP Super Cache), asegúrate de que no almacenen páginas en caché para usuarios conectados (comportamiento habitual por defecto).
+
+= ¿Es compatible con RGPD / cookies y Google Consent Mode v2? =
+Sí. Puedes pausar el rastreo dinámicamente mediante el filtro `emamut_ga_disable_tracking` o inicializar parámetros de Consent Mode v2 utilizando el filtro `emamut_ga_consent_defaults`.
 
 == Changelog ==
 

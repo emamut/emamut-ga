@@ -9,7 +9,12 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 }
 
 if ( is_multisite() ) {
-	$sites = get_sites( array( 'fields' => 'ids' ) );
+	$sites = get_sites(
+		array(
+			'fields' => 'ids',
+			'number' => 0,
+		)
+	);
 	foreach ( $sites as $site_id ) {
 		switch_to_blog( $site_id );
 		delete_option( 'emamut_ga_settings' );

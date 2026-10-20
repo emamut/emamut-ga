@@ -58,18 +58,34 @@ class Emamut_Google_Analytics {
 	}
 
 	/**
+	 * Valida si un ID de medición cumple con el formato estándar de Google (GA4, Google Tag, UA, Ads)
+	 *
+	 * @param string $id ID a validar.
+	 * @return bool
+	 */
+	public static function is_valid_measurement_id( $id ) {
+		if ( ! is_string( $id ) || '' === trim( $id ) ) {
+			return false;
+		}
+
+		return (bool) preg_match( '/^(G|GT|UA|AW)-[A-Z0-9]+(-[0-9]+)?$/', strtoupper( trim( $id ) ) );
+	}
+
+	/**
 	 * Obtiene el ID de medición configurado (o constante EMAMUT_GA_ID)
 	 *
 	 * @return string
 	 */
 	public function get_measurement_id() {
 		if ( defined( 'EMAMUT_GA_ID' ) && is_string( EMAMUT_GA_ID ) && '' !== trim( EMAMUT_GA_ID ) ) {
-			return sanitize_text_field( trim( EMAMUT_GA_ID ) );
+			$constant_id = sanitize_text_field( trim( EMAMUT_GA_ID ) );
+			return self::is_valid_measurement_id( $constant_id ) ? strtoupper( $constant_id ) : '';
 		}
 
 		$options = get_option( EMAMUT_GA_OPTION_NAME, array() );
 		if ( ! empty( $options['measurement_id'] ) ) {
-			return sanitize_text_field( trim( $options['measurement_id'] ) );
+			$option_id = sanitize_text_field( trim( $options['measurement_id'] ) );
+			return self::is_valid_measurement_id( $option_id ) ? strtoupper( $option_id ) : '';
 		}
 
 		return '';
@@ -99,12 +115,7 @@ class Emamut_Google_Analytics {
 		}
 
 		$measurement_id = $this->get_measurement_id();
-		if ( empty( $measurement_id ) ) {
-			return;
-		}
-
-		// Validar formato básico de ID de Google (GA4: G-XXXXX, Universal: UA-XXXXX-X, Tag Manager/Ads: GT-XXXXX / AW-XXXXX)
-		if ( ! preg_match( '/^[A-Za-z0-9\-]+$/', $measurement_id ) ) {
+		if ( empty( $measurement_id ) || ! self::is_valid_measurement_id( $measurement_id ) ) {
 			return;
 		}
 
@@ -129,18 +140,28 @@ class Emamut_Google_Analytics {
 		/**
 		 * Permite inyectar un atributo nonce para sitios con Content Security Policy (CSP) estricta.
 		 *
-		 * @param string $nonce Atributo o valor del nonce.
+		 * @param string $nonce Atributo o valor del nonce (debe ser una cadena Base64 válida).
 		 */
 		$nonce = apply_filters( 'emamut_ga_script_nonce', '' );
-		if ( ! empty( $nonce ) ) {
+		if ( ! empty( $nonce ) && is_string( $nonce ) && preg_match( '/^[A-Za-z0-9+\/=\-_]+$/', $nonce ) ) {
 			$nonce_attr = ' nonce="' . esc_attr( $nonce ) . '"';
 		}
+
+		/**
+		 * Permite configurar los parámetros por defecto de Google Consent Mode v2.
+		 *
+		 * @param array $consent_defaults Parámetros de consentimiento por defecto (ej: array( 'analytics_storage' => 'denied' )).
+		 */
+		$consent_defaults = apply_filters( 'emamut_ga_consent_defaults', array() );
 		?>
 <!-- Google tag (gtag.js) - Google Analytics -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=<?php echo $escaped_id; ?>"<?php echo $nonce_attr; ?>></script>
 <script<?php echo $nonce_attr; ?>>
   window.dataLayer = window.dataLayer || [];
   function gtag(){dataLayer.push(arguments);}
+<?php if ( ! empty( $consent_defaults ) && is_array( $consent_defaults ) ) : ?>
+  gtag('consent', 'default', <?php echo wp_json_encode( $consent_defaults ); ?>);
+<?php endif; ?>
   gtag('js', new Date());
 
   gtag('config', '<?php echo $escaped_js_id; ?>');
@@ -223,7 +244,7 @@ class Emamut_Google_Analytics {
 			$raw_id   = trim( (string) $input['measurement_id'] );
 			$clean_id = strtoupper( $raw_id );
 
-			if ( '' !== $clean_id && ! preg_match( '/^(G|GT|UA|AW)-[A-Z0-9]+(-[0-9]+)?$/', $clean_id ) ) {
+			if ( '' !== $clean_id && ! self::is_valid_measurement_id( $clean_id ) ) {
 				if ( function_exists( 'add_settings_error' ) ) {
 					add_settings_error(
 						EMAMUT_GA_OPTION_NAME,
@@ -260,6 +281,7 @@ class Emamut_Google_Analytics {
 		$options        = get_option( EMAMUT_GA_OPTION_NAME, array() );
 		$is_defined     = defined( 'EMAMUT_GA_ID' ) && '' !== trim( EMAMUT_GA_ID );
 		$measurement_id = $is_defined ? sanitize_text_field( trim( EMAMUT_GA_ID ) ) : ( isset( $options['measurement_id'] ) ? $options['measurement_id'] : '' );
+		$is_valid_id    = self::is_valid_measurement_id( $measurement_id );
 		?>
 		<input
 			type="text"
@@ -271,13 +293,21 @@ class Emamut_Google_Analytics {
 			<?php echo $is_defined ? 'readonly' : ''; ?>
 		/>
 		<?php if ( $is_defined ) : ?>
-			<p class="description" style="color: #0073aa;">
+			<p class="description" style="color: <?php echo $is_valid_id ? '#0073aa' : '#d63638'; ?>;">
 				<?php
-				printf(
-					/* translators: %s: constant name */
-					esc_html__( 'El ID está definido mediante la constante %s en wp-config.php y tiene prioridad.', 'emamut-ga' ),
-					'<code>EMAMUT_GA_ID</code>'
-				);
+				if ( $is_valid_id ) {
+					printf(
+						/* translators: %s: constant name */
+						esc_html__( 'El ID está definido mediante la constante %s en wp-config.php y tiene prioridad.', 'emamut-ga' ),
+						'<code>EMAMUT_GA_ID</code>'
+					);
+				} else {
+					printf(
+						/* translators: %s: constant name */
+						esc_html__( 'Atención: La constante %s está definida en wp-config.php pero su formato no es válido.', 'emamut-ga' ),
+						'<code>EMAMUT_GA_ID</code>'
+					);
+				}
 				?>
 			</p>
 		<?php else : ?>
